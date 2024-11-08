@@ -20,15 +20,10 @@ var app = builder.Build();
 // Endpoint para verificar se a API está online
 app.MapGet("/", () => "Hello World!");
 
-// 1. Adicionar um novo livro
+// 1. Adicionar um novo livro - ok
 app.MapPost("/api/books", async (Book book) =>
 {
-    // Valida o ISBN antes de prosseguir
-    if (!book.IsValidISBN())
-    {
-        return Results.BadRequest("ISBN inválido.");
-    }
-
+    
     var queueClient = new QueueClient(connectionString, "books-queue");
     var tableServiceClient = new TableServiceClient(connectionString);
 
@@ -40,18 +35,24 @@ app.MapPost("/api/books", async (Book book) =>
 
     var tableEntity = new TableEntity("Book", book.ISBN)
     {
-        { "TipoLivro", book.TipoLivro },
-        { "Estante", book.Estante },
-        { "Idioma", book.Idioma },
-        { "Titulo", book.Titulo },
-        { "Autor", book.Autor },
-        { "Editora", book.Editora },
-        { "Ano", book.Ano },
-        { "Edicao", book.Edicao },
-        { "Preco", book.Preco },
-        { "Peso", book.Peso },
-        { "Descricao", book.Descricao },
-        { "Capa", book.Capa }
+        // Serializa o objeto Book como JSON e armazena-o no campo "BookData"
+        { "BookData", JsonSerializer.Serialize(new
+            {
+                isbn = book.ISBN,
+                tipo_livro = book.TipoLivro,
+                estante = book.Estante,
+                idioma = book.Idioma,
+                titulo = book.Titulo,
+                autor = book.Autor,
+                editora = book.Editora,
+                ano = book.Ano,
+                edicao = book.Edicao,
+                preco = book.Preco,
+                peso = book.Peso,
+                descricao = book.Descricao,
+                capa = book.Capa
+            })
+        }
     };
 
     await tableClient.AddEntityAsync(tableEntity);
@@ -84,7 +85,7 @@ app.MapPost("/api/books/{isbn}/upload", async (string isbn, IFormFile coverImage
     return Results.Ok(new { CoverImageUrl = coverImageUrl });
 });
 
-// 3. Retorna todos os livros
+// 3. Retorna todos os livros - ok
 app.MapGet("/api/books", async () =>
 {
     var tableServiceClient = new TableServiceClient(connectionString);
@@ -145,39 +146,39 @@ app.MapGet("/api/books/{isbn}", async (string isbn) =>
         return Results.NotFound();
     }
 });
-// 5. Atualiza os dados de um livro
+// 5. Atualiza os dados de um livro - ok
 app.MapPut("/api/books/{isbn}", async (string isbn, Book updatedBook) =>
 {
-    // Valida o ISBN antes de prosseguir
-    if (!updatedBook.IsValidISBN())
-    {
-        return Results.BadRequest("ISBN inválido.");
-    }
-
     var tableServiceClient = new TableServiceClient(connectionString);
     var tableClient = tableServiceClient.GetTableClient("BooksTable");
 
-    var entity = new TableEntity("Book", isbn)
+    var tableEntity = new TableEntity("Book", updatedBook.ISBN)
     {
-        { "TipoLivro", updatedBook.TipoLivro },
-        { "Estante", updatedBook.Estante },
-        { "Idioma", updatedBook.Idioma },
-        { "Titulo", updatedBook.Titulo },
-        { "Autor", updatedBook.Autor },
-        { "Editora", updatedBook.Editora },
-        { "Ano", updatedBook.Ano },
-        { "Edicao", updatedBook.Edicao },
-        { "Preco", updatedBook.Preco },
-        { "Peso", updatedBook.Peso },
-        { "Descricao", updatedBook.Descricao },
-        { "Capa", updatedBook.Capa }
+        // Serializa o objeto Book como JSON e armazena-o no campo "BookData"
+        { "BookData", JsonSerializer.Serialize(new
+            {
+                isbn = updatedBook.ISBN,
+                tipo_livro = updatedBook.TipoLivro,
+                estante = updatedBook.Estante,
+                idioma = updatedBook.Idioma,
+                titulo = updatedBook.Titulo,
+                autor = updatedBook.Autor,
+                editora = updatedBook.Editora,
+                ano = updatedBook.Ano,
+                edicao = updatedBook.Edicao,
+                preco = updatedBook.Preco,
+                peso = updatedBook.Peso,
+                descricao = updatedBook.Descricao,
+                capa = updatedBook.Capa
+            })
+        }
     };
 
-    await tableClient.UpsertEntityAsync(entity);
+    await tableClient.UpsertEntityAsync(tableEntity);
     return Results.Ok(updatedBook);
 });
 
-// 6. Remove um livro
+// 6. Remove um livro  - ok
 app.MapDelete("/api/books/{isbn}", async (string isbn) =>
 {
     var tableServiceClient = new TableServiceClient(connectionString);
