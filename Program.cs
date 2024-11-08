@@ -8,14 +8,28 @@ using minimal_azurite.Model;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<JsonOptions>(options =>
+// Configurações para Antifalsificação
+builder.Services.AddAntiforgery(options =>
 {
-    options.SerializerOptions.PropertyNamingPolicy = null;
+    options.HeaderName = "X-CSRF-TOKEN"; // Define o cabeçalho para a token de antifalsificação
 });
+
+builder.Services.Configure<JsonOptions>(options => { options.SerializerOptions.PropertyNamingPolicy = null; });
 
 string connectionString = builder.Configuration["AzureStorage:ConnectionString"];
 
 var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
 
 // Endpoint para verificar se a API está online
 app.MapGet("/", () => "Hello World!");
@@ -23,7 +37,6 @@ app.MapGet("/", () => "Hello World!");
 // 1. Adicionar um novo livro - ok
 app.MapPost("/api/books", async (Book book) =>
 {
-    
     var queueClient = new QueueClient(connectionString, "books-queue");
     var tableServiceClient = new TableServiceClient(connectionString);
 
@@ -36,7 +49,8 @@ app.MapPost("/api/books", async (Book book) =>
     var tableEntity = new TableEntity("Book", book.ISBN)
     {
         // Serializa o objeto Book como JSON e armazena-o no campo "BookData"
-        { "BookData", JsonSerializer.Serialize(new
+        {
+            "BookData", JsonSerializer.Serialize(new
             {
                 isbn = book.ISBN,
                 tipo_livro = book.TipoLivro,
@@ -58,31 +72,6 @@ app.MapPost("/api/books", async (Book book) =>
     await tableClient.AddEntityAsync(tableEntity);
 
     return Results.Created($"/api/books/{book.ISBN}", book);
-});
-
-// 2. Upload de imagem da capa do livro
-app.MapPost("/api/books/{isbn}/upload", async (string isbn, IFormFile coverImage) =>
-{
-    var blobServiceClient = new BlobServiceClient(connectionString);
-    var blobContainerClient = blobServiceClient.GetBlobContainerClient("book-covers");
-    await blobContainerClient.CreateIfNotExistsAsync();
-
-    var blobClient = blobContainerClient.GetBlobClient(isbn);
-    using (var stream = coverImage.OpenReadStream())
-    {
-        await blobClient.UploadAsync(stream, overwrite: true);
-    }
-
-    var coverImageUrl = blobClient.Uri.ToString();
-
-    var tableServiceClient = new TableServiceClient(connectionString);
-    var tableClient = tableServiceClient.GetTableClient("BooksTable");
-    var entity = await tableClient.GetEntityAsync<TableEntity>("Book", isbn);
-
-
-//    await tableClient.UpdateEntityAsync(entity, isbn);
-
-    return Results.Ok(new { CoverImageUrl = coverImageUrl });
 });
 
 // 3. Retorna todos os livros - ok
@@ -155,7 +144,8 @@ app.MapPut("/api/books/{isbn}", async (string isbn, Book updatedBook) =>
     var tableEntity = new TableEntity("Book", updatedBook.ISBN)
     {
         // Serializa o objeto Book como JSON e armazena-o no campo "BookData"
-        { "BookData", JsonSerializer.Serialize(new
+        {
+            "BookData", JsonSerializer.Serialize(new
             {
                 isbn = updatedBook.ISBN,
                 tipo_livro = updatedBook.TipoLivro,
